@@ -1,3 +1,3 @@
-Porta 80: Aberta
-Porta 2000: Fechada
-Porta 4000: Fechada
+tcp/80: Open
+tcp/2000: Closed
+tcp/4000: Closed

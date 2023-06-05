@@ -25,9 +25,9 @@ def scan_ports(transport_type, host_ip, ports):
         
         # Verificar se a porta está aberta ou fechada
         if result == 0:
-            result_file.write(f'Porta {port}: Aberta\n')
+            result_file.write(f'{transport_type}/{port}: Open\n')
         else:
-            result_file.write(f'Porta {port}: Fechada\n')
+            result_file.write(f'{transport_type}/{port}: Closed\n')
         
         # Fechar o socket
         sock.close()
