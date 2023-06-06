@@ -1,6 +1,27 @@
 import socket
 import sys
 
+def send_payload(transport_type, host_ip, port):
+    # Criar um socket UDP
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(1)
+    
+    # Preparar o payload
+    payload = b"Seu payload aqui"  # Substitua "Seu payload aqui" pelo seu payload real em bytes
+    
+    # Enviar o payload para o endereço IP e porta especificados
+    sock.sendto(payload, (host_ip, port))
+    
+    try:
+        # Aguardar a resposta
+        data, addr = sock.recvfrom(1024)
+        print(f'Recebido ACK de {addr[0]}:{addr[1]} - {data}')
+    except socket.timeout:
+        print(f'Timeout para o ACK de {host_ip}:{port}')
+    finally:
+        # Fechar o socket
+        sock.close()
+
 def scan_ports(transport_type, host_ip, ports):
     # Abrir o arquivo para salvar os resultados
     result_file = open(f'{transport_type}_scan_results.txt', 'w')
@@ -26,6 +47,8 @@ def scan_ports(transport_type, host_ip, ports):
         # Verificar se a porta está aberta ou fechada
         if result == 0:
             result_file.write(f'{transport_type}/{port}: Open\n')
+            if transport_type.lower() == 'udp':
+                send_payload(transport_type, host_ip, port)
         else:
             result_file.write(f'{transport_type}/{port}: Closed\n')
         
