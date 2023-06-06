@@ -7,7 +7,7 @@ def send_payload(transport_type, host_ip, port):
     sock.settimeout(1)
     
     # Preparar o payload
-    payload = b"Seu payload aqui"  # Substitua "Seu payload aqui" pelo seu payload real em bytes
+    payload = b"JAVALI"  # Substitua "Seu payload aqui" pelo seu payload real em bytes
     
     # Enviar o payload para o endereço IP e porta especificados
     sock.sendto(payload, (host_ip, port))
