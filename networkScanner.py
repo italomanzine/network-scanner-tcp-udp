@@ -7,7 +7,10 @@ def send_payload(transport_type, host_ip, port):
     sock.settimeout(1)
     
     # Preparar o payload
-    payload = b"JAVALI"  # Substitua "Seu payload aqui" pelo seu payload real em bytes
+    if transport_type.lower() == 'udp':
+        payload = b'ACK.JAVALI'  # Substitua pelo payload real em bytes
+    else:
+        payload = b''  # Payload vazio para o teste TCP
     
     # Enviar o payload para o endereço IP e porta especificados
     sock.sendto(payload, (host_ip, port))
@@ -15,7 +18,18 @@ def send_payload(transport_type, host_ip, port):
     try:
         # Aguardar a resposta
         data, addr = sock.recvfrom(1024)
-        print(f'Recebido ACK de {addr[0]}:{addr[1]} - {data}')
+        if transport_type.lower() == 'udp':
+            # Verificar se a resposta é válida
+            response = data.decode('utf-8')
+            if response.startswith('ACK') and 'JAVALI' in response:
+                # Escrever a resposta no arquivo
+                with open('udp_scan_results.txt', 'a') as result_file:
+                    result_file.write(f'{response}\n')
+                print(f'Recebido ACK de {addr[0]}:{addr[1]} - {data}')
+            else:
+                print(f'Resposta inválida recebida de {addr[0]}:{addr[1]} - {data}')
+        else:
+            print(f'Recebido ACK de {addr[0]}:{addr[1]} - {data}')
     except socket.timeout:
         print(f'Timeout para o ACK de {host_ip}:{port}')
     finally:
@@ -68,7 +82,7 @@ if __name__ == '__main__':
     # Obter os parâmetros da linha de comando
     transport_type = sys.argv[1]
     host_ip = sys.argv[2]
-    ports = [int(porta) for porta in sys.argv[3].split(',')]
+    ports = [int(port) for port in sys.argv[3].split(',')]
     
-    # Executar a varredura de portas
+    # Realizar a varredura de portas
     scan_ports(transport_type, host_ip, ports)
