@@ -1,5 +1,6 @@
 import socket
 import sys
+import argparse
 
 def scan_ports(transport_type, host_ip, ports):
     # Abrir o arquivo para salvar os resultados
@@ -19,9 +20,22 @@ def scan_ports(transport_type, host_ip, ports):
         # Criar um socket TCP ou UDP
         sock = socket.socket(socket.AF_INET, socket_type)
         sock.settimeout(1)
+        if transport_type.lower() == 'udp':
+            request_payload = b"Javali"
+            sock.sendto(request_payload, (host_ip, port))
+            try:
+                response = sock.recvfrom(1024)
+                response_data = response[0].decode('utf-8')
+                if response_data == 'Javali':
+                    result_file.write(f'{transport_type}/{port}: Open\n')
+                else:
+                    result_file.write(f'{transport_type}/{port}: Closed\n')
+                print(f'Resposta : {response}')
+            except socket.timeout:
+                result_file.write(f'{transport_type}/{port}: Filtered\n')
+            continue
         
-        # Tentar estabelecer uma conexão com a porta especificada
-        result = sock.connect_ex((host_ip, port))
+        result = sock.connect_ex((host_ip, port))   # server host, server port
         
         # Verificar se a porta está aberta ou fechada
         if result == 0:

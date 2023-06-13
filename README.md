@@ -8,3 +8,6 @@ The activity aims to analyze and compare the behavior of different transport pro
 The source code available in this repository provides a solid foundation for understanding and implementing network scanners for both TCP and UDP, allowing for enhancements and customizations as needed. The ultimate goal is to facilitate the identification of ports used by specific services, such as the JWT token receiving service.
 
 Feel free to explore and contribute to this project, collaborating on the development of more robust and efficient port scanning solutions using TCP and UDP protocols.
+
+## Para fazer a varredura de portas TCP e UDP, execute o seguinte comando:
+```
