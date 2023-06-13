@@ -33,6 +33,7 @@ def scan_ports(transport_type, host_ip, ports):
                 print(f'Resposta : {response}')
             except socket.timeout:
                 result_file.write(f'{transport_type}/{port}: Filtered\n')
+            except Exception: pass            
             continue
         
         result = sock.connect_ex((host_ip, port))   # server host, server port
