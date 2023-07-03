@@ -29,12 +29,12 @@ def scan_ports(transport_type, host_ip, ports):
                 if response_data == 'Javali':
                     result_file.write(f'{transport_type}/{port}: Open\n')
                     result_file.write(f'Resposta: {response}')
-                else:
-                    result_file.write(f'{transport_type}/{port}: Closed\n')
+                # else:
+                #     result_file.write(f'{transport_type}/{port}: Closed\n')
                 print(f'Resposta : {response}')
                 result_file.write(f'Resposta: {response}')
             except socket.timeout:
-                result_file.write(f'{transport_type}/{port}: Filtered\n')
+                result_file.write(f'{transport_type}/{port}: Filtered | Closed\n')
             except Exception: pass            
             continue
         
