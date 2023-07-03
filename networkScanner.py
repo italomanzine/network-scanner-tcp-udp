@@ -1,6 +1,18 @@
 import socket
 import sys
 import argparse
+import jwt
+
+def create_jwt_token(payload, secret_key):
+    token = jwt.encode(payload, secret_key, algorithm='HS256')
+    return token
+
+def verify_jwt_token(token, secret_key):
+    try:
+        decoded_token = jwt.decode(token, secret_key, algorithms=['HS256'])
+        return decoded_token
+    except jwt.InvalidTokenError:
+        return None
 
 def scan_ports(transport_type, host_ip, ports):
     # Abrir o arquivo para salvar os resultados
