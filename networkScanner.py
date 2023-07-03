@@ -1,46 +1,73 @@
 import socket
 import sys
+import argparse
+import jwt
+from datetime import datetime
+import json
 
-def send_payload(transport_type, host_ip, port):
-    # Criar um socket UDP
+# Chave privada para assinar os tokens JWT
+private_key = """-----BEGIN RSA PRIVATE KEY-----
+MIICWwIBAAKBgQDWm4AWAq/Fy9Eo0RFqCqziqF9oJ1f6vBtDzHswMCBpLRwAqW19
+wjMK6kgPppzl0wxd0m4NfTF+qrTMQpGZ3/VURhLYOytISjioHfYdqV4n8LhQeQ9k
+BF2lPjCCJDKGesbeXQyS8yVd8lRzRfr1Zd4hN4hHm5dw9dFPq8MzsfHTQQIDAQAB
+AoGAa8gVcNGLR/LCyyJ8+G+py8oM6L+Gz3ZYOabGrZ4DdxmNlS5HJ4G9QvgqK2O2
+0ufKjuWd6USh4IHR8To1oXZgFeidU7V8lTXEJYjMvU4To8RVB2+1v1IYiE42ayw5
+eXWkEdX/JGndYwdQFfWtA81TjOLvVH9X80ZD+8c6Ih+tisECQQD+WUe5yfxOG5gT
+3b5l5SoZnOJtYj1nXHe96FrOXX/McnZ4EMX2B6v4emEcmZKum5lukU1G6cDsbjjW
+0yNO+1b5AkEA4r43o3x6hWfcXhGL6/SOHz8frCktWZ/fZZEaL5IgpdCcZ2ovcH4W
+kbnAe+0ytiR8aORUGSufbwsUCqCfoGJd3QJAGhA4G+W88CZrcP0XhE9Fsyf+mRfJ
+H9RRN3uzxW0VYXcXVDiP6yVH/8ds8WltA3aeWbLl9OrQLmBD/Ls4mL36bwJAdbo4
+waAeiYFjQ8ktTOOU5a6o0zotPDDbkeXcHjr6lB0I76GhODbWlunDgXVbdsN8/fLJ
+LlIRfEzFf4H1FrJGBQJBAID7UmZ8YTRhoexXW7pEskfGWvG7NYHZW4Xu8c2y/5c4
+zLYOxQDn0zTS5CVnYjAr7sIptprlh3wyH/9c2w7QAlI=
+-----END RSA PRIVATE KEY-----"""
+
+# Chave secreta para descriptografar o algoritmo HS256
+secret_key = "dec7557-socket-udp-with-jwt"
+
+def create_jwt_payload(group, seq_number, seq_max, matricula):
+    payload = {
+        "group": group,
+        "seq_number": seq_number,
+        "seq_max": seq_max,
+        "matricula": matricula
+    }
+    return payload
+
+def sign_jwt(payload):
+    token = jwt.encode(payload, private_key, algorithm="RS256")
+    return token.decode("utf-8")
+
+def verify_jwt(token):
+    try:
+        decoded_token = jwt.decode(token, secret_key, algorithms=["HS256"])
+        return decoded_token
+    except jwt.InvalidTokenError:
+        return None
+
+def send_payload_udp(host_ip, port, payload):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(1)
-    
-    # Preparar o payload
-    if transport_type.lower() == 'udp':
-        payload = b'ACK.JAVALI'  # Substitua pelo payload real em bytes
-    else:
-        payload = b''  # Payload vazio para o teste TCP
-    
-    # Enviar o payload para o endereço IP e porta especificados
-    sock.sendto(payload, (host_ip, port))
-    
+
+    sock.sendto(payload.encode('utf-8'), (host_ip, port))
+
     try:
-        # Aguardar a resposta
         data, addr = sock.recvfrom(1024)
-        if transport_type.lower() == 'udp':
-            # Verificar se a resposta é válida
-            response = data.decode('utf-8')
-            if response.startswith('ACK') and 'JAVALI' in response:
-                # Escrever a resposta no arquivo
-                with open('udp_scan_results.txt', 'a') as result_file:
-                    result_file.write(f'{response}\n')
-                print(f'Recebido ACK de {addr[0]}:{addr[1]} - {data}')
-            else:
-                print(f'Resposta inválida recebida de {addr[0]}:{addr[1]} - {data}')
-        else:
-            print(f'Recebido ACK de {addr[0]}:{addr[1]} - {data}')
+        response = data.decode('utf-8')
+        return response
     except socket.timeout:
-        print(f'Timeout para o ACK de {host_ip}:{port}')
+        return None
     finally:
-        # Fechar o socket
         sock.close()
 
-def scan_ports(transport_type, host_ip, ports):
-    # Abrir o arquivo para salvar os resultados
+def save_response_to_file(response, is_signature_valid):
+    with open('responses.txt', 'a') as file:
+        file.write(f'Response: {response}\n')
+        file.write(f'Signature Valid: {is_signature_valid}\n')
+
+def scan_ports(transport_type, host_ip, ports, group, matriculas):
     result_file = open(f'{transport_type}_scan_results.txt', 'w')
 
-    # Verificar o tipo de transporte (TCP ou UDP)
     if transport_type.lower() == 'tcp':
         socket_type = socket.SOCK_STREAM
     elif transport_type.lower() == 'udp':
@@ -48,41 +75,58 @@ def scan_ports(transport_type, host_ip, ports):
     else:
         print("Tipo de transporte inválido. Por favor, escolha entre 'tcp' ou 'udp'.")
         return
-    
-    # Varredura de portas
+
+    seq_number = 1
+    seq_max = 3
+
     for port in ports:
-        # Criar um socket TCP ou UDP
         sock = socket.socket(socket.AF_INET, socket_type)
         sock.settimeout(1)
-        
-        # Tentar estabelecer uma conexão com a porta especificada
+
+        if transport_type.lower() == 'udp':
+            for matricula in matriculas:
+                payload = create_jwt_payload(group, seq_number, seq_max, matricula)
+                token = sign_jwt(payload)
+                response = send_payload_udp(host_ip, port, token)
+
+                if response is not None:
+                    decoded_token = verify_jwt(response)
+                    if decoded_token is not None:
+                        save_response_to_file(response, True)
+                        print(f'Received valid response from {host_ip}:{port} - {response}')
+                        next_number = decoded_token.get('next_number', None)
+                        if next_number is not None:
+                            seq_number = next_number
+                    else:
+                        save_response_to_file(response, False)
+                        print(f'Received response with invalid signature from {host_ip}:{port} - {response}')
+                else:
+                    save_response_to_file('No response', False)
+                    print(f'No response received from {host_ip}:{port}')
+
+            continue
+
         result = sock.connect_ex((host_ip, port))
-        
-        # Verificar se a porta está aberta ou fechada
+
         if result == 0:
             result_file.write(f'{transport_type}/{port}: Open\n')
-            if transport_type.lower() == 'udp':
-                send_payload(transport_type, host_ip, port)
         else:
             result_file.write(f'{transport_type}/{port}: Closed\n')
-        
-        # Fechar o socket
+
         sock.close()
-    
-    # Fechar o arquivo de resultados
+
     result_file.close()
     print(f'Resultados do escaneamento salvos em {transport_type}_scan_results.txt')
 
 if __name__ == '__main__':
-    # Verificar os argumentos da linha de comando
     if len(sys.argv) != 4:
         print('Uso: python networkScanner.py [tcp|udp] [host_ip] [porta1,porta2,porta3]')
         sys.exit(1)
-    
-    # Obter os parâmetros da linha de comando
+
     transport_type = sys.argv[1]
     host_ip = sys.argv[2]
-    ports = [int(port) for port in sys.argv[3].split(',')]
-    
-    # Realizar a varredura de portas
-    scan_ports(transport_type, host_ip, ports)
+    ports = [int(porta) for porta in sys.argv[3].split(',')]
+    group = "JAVALI"
+    matriculas = ["16104677", "20102083", "20204027"]
+
+    scan_ports(transport_type, host_ip, ports, group, matriculas)
