@@ -81,7 +81,7 @@ def scan_ports(transport_type, host_ip, ports, group, matriculas):
         print("Tipo de transporte inválido. Por favor, escolha entre 'tcp' ou 'udp'.")
         return
 
-    seq_number = 1
+    seq_number = 0
     seq_max = 3
 
     for port in ports:
