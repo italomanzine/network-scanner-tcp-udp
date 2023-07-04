@@ -2,37 +2,72 @@ import socket
 import sys
 import argparse
 import jwt
-import rsa
-import hashlib
+from datetime import datetime
 import json
-import time
 
-def create_jwt_token(payload, private_key):
-    token = jwt.encode(payload, private_key, algorithm='RS256')
-    return token
+# Chave privada para assinar os tokens JWT
+private_key = """-----BEGIN RSA PRIVATE KEY-----
+MIICXAIBAAKBgQCXtF3ydONKD+klB0DGzb4inW5Qp1m59H7shXvKpXhQDHJKOt61
+vS+wVO5LYLL/PdH74T+XUHUddw0BU1ZqT1c+raMV78jWljaGWC3Lt/GBGAfY9Wmj
+iUlYU8qwRvhK9Gxvo9782ZU2K1ArOt9lzyspX/wsTVWn8n4yhkKePoYb2QIDAQAB
+AoGAASwlL7sEiK1/zUf1kbPEXOsfj6MDeALyOiy77LCDsgaumXFECF6KcE/vuYhp
+Sby2Ez7F6Yr3JL+nS5PTzqWHVJMgCiO0d7BIU5xwyzFW3gXRbiytQnLmYe8cjaPV
+XEGcC74bjTx0K6puDHjytm4yswB0lS0LN2nFKdDFEgBNtkECQQDUJOKkgO69j4g1
+a2C3s8k9FUvwKaruTUpODiibQD9MhWu9HDt9r7pQmTTNDgFGwGYYjMMY20FZPWRa
+XcNZrbVRAkEAtxDk1DK7Pfu0tqVJ0/xVtVER5O+LWh9EGzk+cNYSv0CNDEQ5ZUtE
+dYU6KHsGkXMAW5wTN9FbO7XE2tSLWj/8CQJBANKLhRCFEey6jhGOb2ACo//mqgZC
+JG378XoEXVKv8eKtLB907KoyBLTHSPsWIjgo7WsCEQMTYAkEgBuboSzY1PECQA3m
+SnmSIIVkRyRXCHQABMHvldw8E+iT1yf6ALOwjVvYGt2DkJgQTvJdWz0XmjgQ80YB
+Y7QpQTQXaQr0eGAx24ECQEJv4t2ma2drkIizABmpvpYnzrPLObrR9BS53q8kNV+/
+cwhfBi5SUZgHJJk0NIwxBF701B3v01TMG2n+bW+8Ar4=
+-----END RSA PRIVATE KEY-----"""
 
-def verify_jwt_token(token, public_key):
+# Chave secreta para descriptografar o algoritmo HS256
+secret_key = "dec7557-socket-udp-with-jwt"
+
+def create_jwt_payload(group, seq_number, seq_max, matricula):
+    payload = {
+        "group": group,
+        "seq_number": seq_number,
+        "seq_max": seq_max,
+        "matricula": matricula
+    }
+    return payload
+
+def sign_jwt(payload):
+    token = jwt.encode(payload, private_key, algorithm="RS256")
+    return token.decode("utf-8")
+
+def verify_jwt(token):
     try:
-        decoded_token = jwt.decode(token, public_key, algorithms=['RS256'])
+        decoded_token = jwt.decode(token, secret_key, algorithms=["HS256"])
         return decoded_token
     except jwt.InvalidTokenError:
         return None
 
-def format_public_key(public_key):
-    pem_key = public_key.save_pkcs1().decode()
-    formatted_key = f"-----BEGIN RSA PUBLIC KEY-----\n{pem_key}\n-----END RSA PUBLIC KEY-----"
-    return formatted_key
+def send_payload_udp(host_ip, port, payload):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(1)
 
-def format_private_key(private_key):
-    pem_key = private_key.save_pkcs1().decode()
-    formatted_key = f"-----BEGIN RSA PRIVATE KEY-----\n{pem_key}\n-----END RSA PRIVATE KEY-----"
-    return formatted_key
+    sock.sendto(payload.encode('utf-8'), (host_ip, port))
 
-def scan_ports(transport_type, host_ip, ports, token):
-    # Abrir o arquivo para salvar os resultados
+    try:
+        data, addr = sock.recvfrom(1024)
+        response = data.decode('utf-8')
+        return response
+    except socket.timeout:
+        return None
+    finally:
+        sock.close()
+
+def save_response_to_file(response, is_signature_valid):
+    with open('responses.txt', 'a') as file:
+        file.write(f'Response: {response}\n')
+        file.write(f'Signature Valid: {is_signature_valid}\n')
+
+def scan_ports(transport_type, host_ip, ports, group, matriculas):
     result_file = open(f'{transport_type}_scan_results.txt', 'w')
 
-    # Verificar o tipo de transporte (TCP ou UDP)
     if transport_type.lower() == 'tcp':
         socket_type = socket.SOCK_STREAM
     elif transport_type.lower() == 'udp':
@@ -40,168 +75,58 @@ def scan_ports(transport_type, host_ip, ports, token):
     else:
         print("Tipo de transporte inválido. Por favor, escolha entre 'tcp' ou 'udp'.")
         return
-    
-    # Varredura de portas
+
+    seq_number = 1
+    seq_max = 3
+
     for port in ports:
-        # Criar um socket TCP ou UDP
         sock = socket.socket(socket.AF_INET, socket_type)
         sock.settimeout(1)
+
         if transport_type.lower() == 'udp':
-            request_payload = token.encode()
-            sock.sendto(request_payload, (host_ip, port))
-            try:
-                response = sock.recvfrom(1024)
-                response_data = response[0].decode('utf-8')
-                if response_data == token:
-                    result_file.write(f'{transport_type}/{port}: Open\n')
+            for matricula in matriculas:
+                payload = create_jwt_payload(group, seq_number, seq_max, matricula)
+                token = sign_jwt(payload)
+                response = send_payload_udp(host_ip, port, token)
+
+                if response is not None:
+                    decoded_token = verify_jwt(response)
+                    if decoded_token is not None:
+                        save_response_to_file(response, True)
+                        print(f'Received valid response from {host_ip}:{port} - {response}')
+                        next_number = decoded_token.get('next_number', None)
+                        if next_number is not None:
+                            seq_number = next_number
+                    else:
+                        save_response_to_file(response, False)
+                        print(f'Received response with invalid signature from {host_ip}:{port} - {response}')
                 else:
-                    result_file.write(f'{transport_type}/{port}: Closed\n')
-            except socket.timeout:
-                result_file.write(f'{transport_type}/{port}: Filtered | Closed\n')
-            except Exception:
-                pass            
+                    save_response_to_file('No response', False)
+                    print(f'No response received from {host_ip}:{port}')
+
             continue
-        
-        result = sock.connect_ex((host_ip, port))   # server host, server port
-        
-        # Verificar se a porta está aberta ou fechada
+
+        result = sock.connect_ex((host_ip, port))
+
         if result == 0:
             result_file.write(f'{transport_type}/{port}: Open\n')
         else:
             result_file.write(f'{transport_type}/{port}: Closed\n')
-        
-        # Fechar o socket
+
         sock.close()
-    
-    # Fechar o arquivo de resultados
+
     result_file.close()
     print(f'Resultados do escaneamento salvos em {transport_type}_scan_results.txt')
 
-def send_request(transport_type, host_ip, port, token):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM if transport_type.lower() == 'udp' else socket.SOCK_STREAM)
-    sock.settimeout(5)
-    
-    if transport_type.lower() == 'udp':
-        sock.sendto(token.encode(), (host_ip, port))
-        try:
-            response = sock.recvfrom(1024)
-            print(f'Resposta do servidor: {response[0].decode()}')
-
-            # Verificar a assinatura do token JWT recebido
-            public_key_pem = """
-            -----BEGIN PUBLIC KEY-----
-            MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgAUkZlGHN9yUvMhy7BpkydNkX
-            xvJ58DkITY/xpTDXirOTk7iJ7orxOrkQq9lMY7dK/QkeJzbrTtuz2EmbnvNfEIyF
-            rCIT1BV8Dfbxhhrxbdl9CRCSnpsFuIOSDNYufdbQpZJxYJ14lMoT3DhI+L4gktZf
-            ea28bkujA0YV4Qn8ZwIDAQAB
-            -----END PUBLIC KEY-----
-            """
-
-            public_key = rsa.PublicKey.load_pkcs1(public_key_pem)
-
-            verified_payload = verify_jwt_token(response[0].decode(), public_key)
-            if verified_payload:
-                print("Token JWT válido. Payload verificado:")
-                print(verified_payload)
-                result_file = open('resposta_bruta.txt', 'w')
-                result_file.write(f'Resposta bruta: {response[0].decode()}\n')
-                result_file.write("Verificação da assinatura: OK\n")
-                result_file.close()
-            else:
-                print("Token JWT inválido.")
-                result_file = open('resposta_bruta.txt', 'w')
-                result_file.write(f'Resposta bruta: {response[0].decode()}\n')
-                result_file.write("Verificação da assinatura: NOT_OK\n")
-                result_file.close()
-        except socket.timeout:
-            print('Tempo limite atingido. Não foi possível receber uma resposta do servidor.')
-        except Exception as e:
-            print(f'Ocorreu um erro ao receber a resposta: {str(e)}')
-    else:
-        try:
-            sock.connect((host_ip, port))
-            sock.sendall(token.encode())
-            response = sock.recv(1024)
-            print(f'Resposta do servidor: {response.decode()}')
-
-            # Verificar a assinatura do token JWT recebido
-            public_key_pem = """
-            -----BEGIN PUBLIC KEY-----
-            MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgAUkZlGHN9yUvMhy7BpkydNkX
-            xvJ58DkITY/xpTDXirOTk7iJ7orxOrkQq9lMY7dK/QkeJzbrTtuz2EmbnvNfEIyF
-            rCIT1BV8Dfbxhhrxbdl9CRCSnpsFuIOSDNYufdbQpZJxYJ14lMoT3DhI+L4gktZf
-            ea28bkujA0YV4Qn8ZwIDAQAB
-            """
-
-            public_key = rsa.PublicKey.load_pkcs1(public_key_pem)
-
-            verified_payload = verify_jwt_token(response.decode(), public_key)
-            if verified_payload:
-                print("Token JWT válido. Payload verificado:")
-                print(verified_payload)
-                result_file = open('resposta_bruta.txt', 'w')
-                result_file.write(f'Resposta bruta: {response.decode()}\n')
-                result_file.write("Verificação da assinatura: OK\n")
-                result_file.close()
-            else:
-                print("Token JWT inválido.")
-                result_file = open('resposta_bruta.txt', 'w')
-                result_file.write(f'Resposta bruta: {response.decode()}\n')
-                result_file.write("Verificação da assinatura: NOT_OK\n")
-                result_file.close()
-        except socket.timeout:
-            print('Tempo limite atingido. Não foi possível receber uma resposta do servidor.')
-        except Exception as e:
-            print(f'Ocorreu um erro ao receber a resposta: {str(e)}')
-        finally:
-            sock.close()
-
-def main():
-    parser = argparse.ArgumentParser(description='TCP/UDP client')
-    parser.add_argument('--transport', type=str, choices=['tcp', 'udp'], help='Transport protocol (TCP/UDP)')
-    parser.add_argument('--ip', type=str, help='Server IP address')
-    parser.add_argument('--port', type=int, help='Server port')
-    parser.add_argument('--token', type=str, help='Token de resposta JWT')
-
-    args = parser.parse_args()
-
-    transport_type = args.transport
-    host_ip = args.ip
-    port = args.port
-    token = args.token
-
-    if not transport_type or not host_ip or not port or not token:
-        print("Por favor, forneça o tipo de transporte (--transport), o IP do servidor (--ip), a porta (--port) e o token JWT de resposta (--token).")
-        return
-
-    # Verificar a assinatura do token JWT recebido
-    public_key_pem = """
-    -----BEGIN PUBLIC KEY-----
-    MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgAUkZlGHN9yUvMhy7BpkydNkX
-    xvJ58DkITY/xpTDXirOTk7iJ7orxOrkQq9lMY7dK/QkeJzbrTtuz2EmbnvNfEIyF
-    rCIT1BV8Dfbxhhrxbdl9CRCSnpsFuIOSDNYufdbQpZJxYJ14lMoT3DhI+L4gktZf
-    ea28bkujA0YV4Qn8ZwIDAQAB
-    """
-
-    public_key = rsa.PublicKey.load_pkcs1(public_key_pem)
-
-    verified_payload = verify_jwt_token(token, public_key)
-    if verified_payload:
-        print("Token JWT válido. Payload verificado:")
-        print(verified_payload)
-        result_file = open('resposta_bruta.txt', 'w')
-        result_file.write(f'Token JWT: {token}\n')
-        result_file.write("Verificação da assinatura: OK\n")
-        result_file.close()
-    else:
-        print("Token JWT inválido.")
-        result_file = open('resposta_bruta.txt', 'w')
-        result_file.write(f'Token JWT: {token}\n')
-        result_file.write("Verificação da assinatura: NOT_OK\n")
-        result_file.close()
-
-    # Enviar mensagem para o próximo aluno
-    print("Enviar a mensagem do próximo aluno aqui...")
-
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) != 4:
+        print('Uso: python networkScanner.py [tcp|udp] [host_ip] [porta1,porta2,porta3]')
+        sys.exit(1)
+
+    transport_type = sys.argv[1]
+    host_ip = sys.argv[2]
+    ports = [int(porta) for porta in sys.argv[3].split(',')]
+    group = "JAVALI"
+    matriculas = ["16104677", "20102083", "20204027"]
+
+    scan_ports(transport_type, host_ip, ports, group, matriculas)
