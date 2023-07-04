@@ -58,7 +58,7 @@ def send_payload_udp(host_ip, port, payload):
 
     try:
         data, addr = sock.recvfrom(1024)
-        response = data.decode('utf-8') 
+        response = data.decode('utf-8')
         return response
     except socket.timeout:
         return None
@@ -66,8 +66,16 @@ def send_payload_udp(host_ip, port, payload):
         sock.close()
 
 def save_response_to_file(response, is_signature_valid):
+    try:
+        payload_response = response
+        # Descriptografe o payload usando a chave secreta
+        decoded_payload = jwt.decode(payload_response, secret_key, algorithms=["HS256"])
+        # O payload descriptografado estará disponível na variável decoded_payload
+    except jwt.InvalidTokenError:
+        print("Token inválido")
     with open('responses.txt', 'a') as file:
-        file.write(f'Response: {response}\n')
+        file.write(f'Response: {response}\n\n')
+        file.write(f'Decoded payload response: {decoded_payload}\n\n')
         file.write(f'Signature Valid: {is_signature_valid}\n')
 
 def scan_ports(transport_type, host_ip, ports, group, matriculas):
