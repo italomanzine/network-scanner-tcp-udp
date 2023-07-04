@@ -7,19 +7,19 @@ import json
 
 # Chave privada para assinar os tokens JWT
 private_key = """-----BEGIN RSA PRIVATE KEY-----
-MIICWwIBAAKBgQDWm4AWAq/Fy9Eo0RFqCqziqF9oJ1f6vBtDzHswMCBpLRwAqW19
-wjMK6kgPppzl0wxd0m4NfTF+qrTMQpGZ3/VURhLYOytISjioHfYdqV4n8LhQeQ9k
-BF2lPjCCJDKGesbeXQyS8yVd8lRzRfr1Zd4hN4hHm5dw9dFPq8MzsfHTQQIDAQAB
-AoGAa8gVcNGLR/LCyyJ8+G+py8oM6L+Gz3ZYOabGrZ4DdxmNlS5HJ4G9QvgqK2O2
-0ufKjuWd6USh4IHR8To1oXZgFeidU7V8lTXEJYjMvU4To8RVB2+1v1IYiE42ayw5
-eXWkEdX/JGndYwdQFfWtA81TjOLvVH9X80ZD+8c6Ih+tisECQQD+WUe5yfxOG5gT
-3b5l5SoZnOJtYj1nXHe96FrOXX/McnZ4EMX2B6v4emEcmZKum5lukU1G6cDsbjjW
-0yNO+1b5AkEA4r43o3x6hWfcXhGL6/SOHz8frCktWZ/fZZEaL5IgpdCcZ2ovcH4W
-kbnAe+0ytiR8aORUGSufbwsUCqCfoGJd3QJAGhA4G+W88CZrcP0XhE9Fsyf+mRfJ
-H9RRN3uzxW0VYXcXVDiP6yVH/8ds8WltA3aeWbLl9OrQLmBD/Ls4mL36bwJAdbo4
-waAeiYFjQ8ktTOOU5a6o0zotPDDbkeXcHjr6lB0I76GhODbWlunDgXVbdsN8/fLJ
-LlIRfEzFf4H1FrJGBQJBAID7UmZ8YTRhoexXW7pEskfGWvG7NYHZW4Xu8c2y/5c4
-zLYOxQDn0zTS5CVnYjAr7sIptprlh3wyH/9c2w7QAlI=
+MIICXAIBAAKBgQCXtF3ydONKD+klB0DGzb4inW5Qp1m59H7shXvKpXhQDHJKOt61
+vS+wVO5LYLL/PdH74T+XUHUddw0BU1ZqT1c+raMV78jWljaGWC3Lt/GBGAfY9Wmj
+iUlYU8qwRvhK9Gxvo9782ZU2K1ArOt9lzyspX/wsTVWn8n4yhkKePoYb2QIDAQAB
+AoGAASwlL7sEiK1/zUf1kbPEXOsfj6MDeALyOiy77LCDsgaumXFECF6KcE/vuYhp
+Sby2Ez7F6Yr3JL+nS5PTzqWHVJMgCiO0d7BIU5xwyzFW3gXRbiytQnLmYe8cjaPV
+XEGcC74bjTx0K6puDHjytm4yswB0lS0LN2nFKdDFEgBNtkECQQDUJOKkgO69j4g1
+a2C3s8k9FUvwKaruTUpODiibQD9MhWu9HDt9r7pQmTTNDgFGwGYYjMMY20FZPWRa
+XcNZrbVRAkEAtxDk1DK7Pfu0tqVJ0/xVtVER5O+LWh9EGzk+cNYSv0CNDEQ5ZUtE
+dYU6KHsGkXMAW5wTN9FbO7XE2tSLWj/8CQJBANKLhRCFEey6jhGOb2ACo//mqgZC
+JG378XoEXVKv8eKtLB907KoyBLTHSPsWIjgo7WsCEQMTYAkEgBuboSzY1PECQA3m
+SnmSIIVkRyRXCHQABMHvldw8E+iT1yf6ALOwjVvYGt2DkJgQTvJdWz0XmjgQ80YB
+Y7QpQTQXaQr0eGAx24ECQEJv4t2ma2drkIizABmpvpYnzrPLObrR9BS53q8kNV+/
+cwhfBi5SUZgHJJk0NIwxBF701B3v01TMG2n+bW+8Ar4=
 -----END RSA PRIVATE KEY-----"""
 
 # Chave secreta para descriptografar o algoritmo HS256
@@ -34,9 +34,14 @@ def create_jwt_payload(group, seq_number, seq_max, matricula):
     }
     return payload
 
+# def sign_jwt(payload):
+#     token = jwt.encode(payload, private_key, algorithm="RS256")
+#     return token.decode("utf-8")
+
 def sign_jwt(payload):
     token = jwt.encode(payload, private_key, algorithm="RS256")
-    return token.decode("utf-8")
+    return token
+
 
 def verify_jwt(token):
     try:
@@ -53,7 +58,7 @@ def send_payload_udp(host_ip, port, payload):
 
     try:
         data, addr = sock.recvfrom(1024)
-        response = data.decode('utf-8')
+        response = data.decode('utf-8') 
         return response
     except socket.timeout:
         return None
