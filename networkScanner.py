@@ -22,9 +22,10 @@ Y7QpQTQXaQr0eGAx24ECQEJv4t2ma2drkIizABmpvpYnzrPLObrR9BS53q8kNV+/
 cwhfBi5SUZgHJJk0NIwxBF701B3v01TMG2n+bW+8Ar4=
 -----END RSA PRIVATE KEY-----"""
 
-# Chave secreta para descriptografar o algoritmo HS256
+# Chave secreta para descriptografar o algoritmo HS256 que vai ser enviado como resposta
 secret_key = "dec7557-socket-udp-with-jwt"
 
+# estamos criando o formato do payload que vamos enviar para o servidor
 def create_jwt_payload(group, seq_number, seq_max, matricula):
     payload = {
         "group": group,
@@ -34,15 +35,14 @@ def create_jwt_payload(group, seq_number, seq_max, matricula):
     }
     return payload
 
-# def sign_jwt(payload):
-#     token = jwt.encode(payload, private_key, algorithm="RS256")
-#     return token.decode("utf-8")
-
+# Estamos codificando nosso payload com a chave privada que esta no inicio do código e deve ser
+# descriptografada com a chava publica que enviamos para o professor
 def sign_jwt(payload):
     token = jwt.encode(payload, private_key, algorithm="RS256")
     return token
 
-
+# verificamos se a assinatura da mensagem que vamos receber é válida
+# usando o comando is_signature_valid logo abaixo
 def verify_jwt(token):
     try:
         decoded_token = jwt.decode(token, secret_key, algorithms=["HS256"])
@@ -50,12 +50,14 @@ def verify_jwt(token):
     except jwt.InvalidTokenError:
         return None
 
+# enviamos o payload para o servidor pela porta indicada
 def send_payload_udp(host_ip, port, payload):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(1)
 
     sock.sendto(payload.encode('utf-8'), (host_ip, port))
 
+    # nessa parte nós capturamos a respota do servidor
     try:
         data, addr = sock.recvfrom(1024)
         response = data.decode('utf-8')
@@ -65,6 +67,7 @@ def send_payload_udp(host_ip, port, payload):
     finally:
         sock.close()
 
+# com a resposta capturada nós escrevemos e salvamos ela em um arquivo txt bruto
 def save_response_to_file(response, is_signature_valid):
     try:
         payload_response = response
@@ -78,6 +81,7 @@ def save_response_to_file(response, is_signature_valid):
         file.write(f'Decoded payload response: {decoded_payload}\n\n')
         file.write(f'Signature Valid: {is_signature_valid}\n')
 
+# Aqui é resquicio da parte 1 do trabalho onde escaneavamos todas as portas udp e tcp
 def scan_ports(transport_type, host_ip, ports, group, matriculas):
     result_file = open(f'{transport_type}_scan_results.txt', 'w')
 
@@ -89,6 +93,9 @@ def scan_ports(transport_type, host_ip, ports, group, matriculas):
         print("Tipo de transporte inválido. Por favor, escolha entre 'tcp' ou 'udp'.")
         return
 
+    # devido a estrutura do servidor disponibilizada pelo professor
+    # sempre que começarmos um envio ao servidor, deve se inicializar com o estado zero
+    # antes de enviar as próximas mensagens (uma especie de "reset" no canal entre cliente-servidor)
     seq_number = 0
     seq_max = 3
 
@@ -136,10 +143,11 @@ if __name__ == '__main__':
         print('Uso: python networkScanner.py [tcp|udp] [host_ip] [porta1,porta2,porta3]')
         sys.exit(1)
 
+    # aqui nós estamos colocando a sequencia de payloads que serão enviadas para o servidor
     transport_type = sys.argv[1]
     host_ip = sys.argv[2]
     ports = [int(porta) for porta in sys.argv[3].split(',')]
     group = "JAVALI"
     matriculas = ["16104677", "20102083", "20204027"]
 
-    scan_ports(transport_type, host_ip, ports, group, matriculas)
+    #scan_ports(transport_type, host_ip, ports, group, matriculas)
